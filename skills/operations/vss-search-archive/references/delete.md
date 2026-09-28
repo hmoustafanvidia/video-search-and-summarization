@@ -40,6 +40,10 @@ while :; do
     --arg id "${SAVED_SENSOR_ID}" --arg name "${SAVED_SOURCE_NAME}" \
     'any(.sensors[]; .sensor_id == $id or .name == $name)') || exit 1
   case "${VST_PRESENT}" in true|false) ;; *) exit 1 ;; esac
+  # Three DISTINCT cleanup tuples — do not collapse them into one query:
+  # embed  -> sensor.id.keyword = saved UUID
+  # behavior -> sensor.id.keyword = canonical NAME (not the UUID)
+  # raw     -> sensorId.keyword = canonical NAME
   EMBED_COUNT=$(index_count "${DELETE_READINESS_DEADLINE}" "${EMBED_INDEX}" sensor.id.keyword \
     "${SAVED_SENSOR_ID}") || exit 1
   BEHAVIOR_COUNT=$(index_count "${DELETE_READINESS_DEADLINE}" "${BEHAVIOR_INDEX}" sensor.id.keyword \
@@ -57,8 +61,11 @@ printf 'delete_status=success vst_present=%s counts=%s,%s,%s\n' \
 ```
 
 Reuse the same runtime values and poll until VST no longer lists the source,
-the embedding tuple for the saved UUID is zero, and behavior/raw tuples for the
-canonical name are zero. Report all counts. Never delete an ambiguous source or
+the embedding tuple (sensor.id.keyword = saved UUID) is zero, and
+behavior/raw tuples (sensor.id.keyword / sensorId.keyword = canonical NAME,
+not the UUID) are zero. The three tuples are distinct — a mismatch
+reads the wrong index and reports a false zero. Report all counts. Never
+delete an ambiguous source or
 issue independent backend cleanup. RTSP deletion uses
 `vss vios delete --type stream --sensor <name>` and the same bounded absence
 checks; never substitute a direct backend mutation.
