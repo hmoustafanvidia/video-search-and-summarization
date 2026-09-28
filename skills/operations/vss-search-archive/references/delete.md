@@ -8,6 +8,12 @@ RT-CV, RT-Embed, and RT-VLM, and run the upload-anchor Elasticsearch cleanups
 anchors). Never send a bare `DELETE` to VST, RTVI-CV, RTVI-Embed, storage-ms, or
 Elasticsearch, and never issue an Agent `DELETE /api/v1/videos/<id>` — `vss
 vios delete` is canonical:
+Verify zero on three DISTINCT tuples — `embed` on `sensor.id.keyword` = the
+saved UUID; `behavior` on `sensor.id.keyword` = the canonical NAME; `raw` on
+`sensorId.keyword` = the canonical NAME. Any other field or value reads the
+wrong index and reports a false zero. The `camera_remove` webhooks run the
+Elasticsearch cleanup after `vss vios delete`; do not also send a bare `DELETE`
+to Elasticsearch.
 
 ```bash
 : "${SAVED_SENSOR_ID:?save the exact file-source UUID before deletion}"
@@ -20,6 +26,7 @@ resolve_upload_indexes || exit 1
 DELETE_READINESS_DEADLINE=$(($(date +%s) + 600))
 DELETE_TIMEOUT=$(source_timeout "${DELETE_READINESS_DEADLINE}" 60) || exit 1
 vss vios delete --type video --sensor "${SAVED_SOURCE_NAME}" || exit 1
+# The camera_remove webhooks own the ES anchor cleanup; do not also DELETE from Elasticsearch directly.
 
 # Last-known state, so an expiry can say what is still present rather than
 # only that it gave up.
