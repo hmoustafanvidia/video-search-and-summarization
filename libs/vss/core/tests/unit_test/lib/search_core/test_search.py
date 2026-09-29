@@ -12,6 +12,7 @@ from typing import Any
 from pydantic import ValidationError
 import pytest
 
+from vss_core._foundation.time_measure import collect_timings
 from vss_core.search_core.agent_chunks import AgentMessageChunk
 from vss_core.search_core.agent_chunks import AgentMessageChunkType
 from vss_core.search_core.errors import BackendUnreachableError
@@ -183,6 +184,28 @@ async def _run(inp: SearchInput, **kwargs: Any) -> Any:
 
 
 class TestExecutionPaths:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("fusion_method", "attributes"),
+        [("rrf", []), ("rrf", ["white jacket"]), ("weighted_rrf", [])],
+        ids=["rrf-embed-only", "rrf-with-attributes", "weighted-rrf"],
+    )
+    async def test_fusion_score_combination_is_timed_once(self, fusion_method, attributes):
+        with collect_timings() as timings:
+            await _run(
+                SearchInput(
+                    query="person in white jacket",
+                    source_type="video_file",
+                    attributes=attributes,
+                    search_mode="fusion",
+                ),
+                embed_search=_FakeEmbed([_embed_output([_embed_item()])]),
+                attribute_search_fn=_FakeAttr([_attr_result()]),
+                config=_config(fusion_method=fusion_method),
+            )
+
+        assert timings["search: fusion score combination"]["calls"] == 1
+
     @pytest.mark.asyncio
     async def test_fusion_requires_tag_provider(self):
         with pytest.raises(ConfigurationError, match="tag_search must be pre-loaded"):

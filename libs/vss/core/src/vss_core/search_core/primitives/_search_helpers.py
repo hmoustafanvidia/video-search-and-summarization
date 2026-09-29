@@ -611,17 +611,18 @@ async def execute_core_search(
                     rrf_w=config.rrf_w,
                 )
             else:
-                candidates = [
-                    _fusion.FusionCandidate(
-                        embed_result=result,
-                        embed_score=_coerce_float(result.similarity),
-                        normalised_attribute_score=0.0,
-                        screenshot_url=_coerce_str(result.screenshot_url),
-                        object_ids=[],
-                    )
-                    for result in embed_results
-                ]
-                search_results = _fusion.rrf_fusion(candidates, config.rrf_k, config.rrf_w)
+                with TimeMeasure("search: fusion score combination"):
+                    candidates = [
+                        _fusion.FusionCandidate(
+                            embed_result=result,
+                            embed_score=_coerce_float(result.similarity),
+                            normalised_attribute_score=0.0,
+                            screenshot_url=_coerce_str(result.screenshot_url),
+                            object_ids=[],
+                        )
+                        for result in embed_results
+                    ]
+                    search_results = _fusion.rrf_fusion(candidates, config.rrf_k, config.rrf_w)
             # Apply the top-percent filter the embed/attribute and general fusion paths
             # apply; without this the rrf early-return would make --top-percent-filter
             # a no-op for the default fusion method.
@@ -717,12 +718,13 @@ async def execute_core_search(
                 "set at least one positive weight."
             )
 
-        search_results = _fusion.fuse_ranked_union(
-            provider_results,
-            method=config.fusion_method,
-            weights={"tag": config.w_tag, "embed": config.w_embed, "attribute": config.w_attribute},
-            rrf_k=config.rrf_k,
-        )
+        with TimeMeasure("search: fusion score combination"):
+            search_results = _fusion.fuse_ranked_union(
+                provider_results,
+                method=config.fusion_method,
+                weights={"tag": config.w_tag, "embed": config.w_embed, "attribute": config.w_attribute},
+                rrf_k=config.rrf_k,
+            )
         search_results = _fusion.apply_top_percent_filter(search_results, getattr(config, "top_percent_filter", None))
         if getattr(config, "merge_adjacent", True):
             search_results = _fusion.merge_consecutive_results(search_results)
